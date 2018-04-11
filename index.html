@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Welcome to Vue</title>
+  <script src="https://unpkg.com/vue"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- <img src="https://vuejs.org/images/logo.png" alt="Vue logo"> -->
+    <ul id="comments">
+      <li v-for="comment in comments">
+        {{ comment.text }}
+        <button v-on:click="deleteComment(comment.id)">&#10005;</button>
+      </li>
+    </ul> 
+  </div>
+
+  <script>
+    const GET_COMMENTS = 'GET_COMMENTS'
+    const DELETE_COMMENT = 'DELETE_COMMENT'
+
+    class Api {
+      constructor() {
+        this.comments = [];
+        this.connection = null;
+        this.pendingMessages = [];
+        this.createConnection();
+        this.getComments();
+      }
+
+      createConnection() {
+        try {
+        this.connection = new WebSocket('ws://localhost:3000')
+        this.connection.onmessage = event => {
+          let json;
+
+          try {
+            json = JSON.parse(event.data)
+          } catch (error) {
+            console.error('Failed to parse event data', event.data, error)
+            return
+          }
+
+          const { action, payload } = json
+
+          switch (action) {
+            case GET_COMMENTS: {
+              const { comments } = payload
+              this.setComments(comments)
+              return;
+            }
+            case DELETE_COMMENT: {
+              const { id } = payload;
+              this.setComments(this.comments.filter(comment => comment.id !== id));
+              return;
+            }
+          }
+        }
+
+        this.connection.onerror = () => {
+          clearTimeout(this.timeout)
+          this.timeout = setTimeout(
+            () => this.createConnection(),
+            900
+          )
+        }
+
+        this.connection.onopen = () => this.sendPendingMessages()
+
+        } catch (error) {
+          console.error('Failed to create connection');
+        }
+      }
+
+      sendPendingMessages() {
+        if (this.open) {
+          this.pendingMessages.forEach((message, index) => {
+            this.connection.send(message)
+            this.pendingMessages.splice(index, 1)
+          })
+        }
+      }
+
+      get open() {
+        return this.connection ? this.connection.readyState === WebSocket.OPEN : false
+      }
+
+      setComments(comments) {
+        this.comments = comments || [];
+        this._onCommentsUpdate && this._onCommentsUpdate()
+      }
+
+      send(message) {
+        if (!this.connection) {
+          this.createConnection()
+        }
+
+        this.pendingMessages.push(JSON.stringify(message))
+        this.sendPendingMessages()
+      }
+
+      onCommentsUpdate(callback) {
+        this._onCommentsUpdate = callback
+      }
+
+      getComments() {
+        this.send({ action: GET_COMMENTS })
+      }
+
+      deleteComment(id) {
+        this.send({ action: DELETE_COMMENT, payload: { id } })
+      }
+
+      destroy() {
+        clearTimeout(this.timeout)
+        this.connection.close()
+        this.connection = null
+        this._onCommentsUpdate = null;
+      }
+    }
+
+    const api = new Api()
+    var app = new Vue({
+      el: '#app',
+      
+      data() {
+        return {
+          comments: []
+        }
+      },
+      
+      created() {
+        this.api = new Api()
+        this.updateComments()
+      },
+      
+      destroyed() {
+        this.api.destroy()
+      },
+
+      mounted() {
+        this.api.onCommentsUpdate(() => this.updateComments())
+      },
+      
+      methods: {
+        updateComments() {
+          this.comments = this.api.comments;
+        },
+
+        getComments() {
+          this.api.getComments()
+        },
+
+        deleteComment(id) {
+          this.api.deleteComment(id)
+        }
+      }
+    })
+  </script>
+</body>
+</html>
