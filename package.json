@@ -4,11 +4,14 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js",
+    "web": "open index.html"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "open": "0.0.5",
     "ws": "^5.1.1"
   }
 }
